@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><title>Salta el límite</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{--bg:#f1efe8;--fg:#1c2530;--pn:#fff;--mu:#5b6673;--ac:#0e7490;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10151c;--fg:#e6ebf1;--pn:#1a222d;--mu:#9aa6b4;--ac:#5fd0e8}}
+:root[data-theme="dark"]{--bg:#10151c;--fg:#e6ebf1;--pn:#1a222d;--mu:#9aa6b4;--ac:#5fd0e8}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:Georgia,"Times New Roman",serif}
+#app{max-width:820px;margin:0 auto;padding:10px}
+h1{font-size:21px;margin:2px 0 8px;font-weight:700}
+#bar{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+#bar button{width:34px;height:34px;border-radius:50%;border:2px solid var(--mu);background:var(--pn);color:var(--fg);font:700 14px Georgia,serif;cursor:pointer}
+#bar button.on{border-color:var(--ac);background:var(--ac);color:#fff}
+#bar button.ok{border-color:#16a34a}
+#bar span{margin-left:auto;color:var(--mu);font-size:14px}
+#wrap{position:relative}
+canvas{width:100%;height:auto;display:block;border-radius:10px;background:#8ec5ea;touch-action:none}
+#ov{position:absolute;inset:0;background:rgba(9,15,24,.95);border-radius:10px;color:#e6ebf1;padding:16px 20px;overflow:auto;box-sizing:border-box}
+#ov h2{margin:4px 0 6px;font-size:22px}
+#ov .k{display:inline-block;padding:2px 10px;border-radius:12px;color:#0d1620;font:700 13px system-ui,sans-serif}
+#ov code{display:block;margin:8px 0;padding:8px 10px;background:#17222f;border-radius:6px;font:14px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#9be7f5}
+#ov p{margin:6px 0;line-height:1.5;font-size:15px;max-width:66ch}
+#ov button{margin-top:8px;padding:10px 22px;border:0;border-radius:8px;background:#f5c542;color:#1c1500;font:700 16px system-ui,sans-serif;cursor:pointer}
+#pad{display:flex;gap:8px;margin-top:8px}
+#pad button{flex:1;height:52px;border-radius:10px;border:2px solid var(--mu);background:var(--pn);color:var(--fg);font-size:22px;user-select:none;touch-action:none}
+small{color:var(--mu);display:block;margin-top:6px}
+</style></head><body><div id="app">
+<h1>Salta el límite</h1>
+<div id="bar"></div>
+<div id="wrap"><canvas id="c" width="800" height="450"></canvas><div id="ov"></div></div>
+<div id="pad"><button id="bl">◀</button><button id="bj">⤒ Saltar</button><button id="br">▶</button></div>
+<small>Teclado: ← → (o A D) para moverte, ↑ / W / Espacio para saltar. La línea es tu plataforma.</small>
+</div>
+<script>
+const C=document.getElementById('c'),X=C.getContext('2d'),W=800,H=450,SC=40,OX=400,HOLE=20;
+const TY=['Discontinuidad evitable','Discontinuidad de salto','Discontinuidad infinita'],CO=['#22d3ee','#f5a623','#f472b6'];
+const LV=[
+{t:0,n:'Un hueco en la recta',fx:'f(x) = (x² − 4) / (2x − 4)',oy:290,segs:[{f:x=>(x+2)/2,a:-9,b:6.5}],holes:[[2,2]],lab:[[2.4,2.9,'límite = 2, f(2) no existe']],sx:-8.5,gx:5.5,
+h:'<p>Al simplificar, f(x) = (x + 2)/2 para x ≠ 2, así que la gráfica es una recta con un solo punto faltante en (2, 2). El límite <b>sí existe</b>: lim x→2 f(x) = 2, pero f(2) no está definida.</p><p>Se llama <b>evitable</b> porque se arregla rellenando el punto con f(2) = 2. En el juego el círculo vacío es un punto que no existe, y lo hemos ensanchado para que se note como un vacío: salta sobre él.</p>'},
+{t:0,n:'El punto fuera de lugar',fx:'f(x) = 3 − x²/8  si x ≠ 0\nf(0) = 5',oy:300,segs:[{f:x=>3-x*x/8,a:-6.5,b:6.5}],holes:[[0,3]],pts:[[0,5]],lab:[[0.6,3.5,'límite = 3'],[0.6,5.3,'f(0) = 5']],sx:-6.2,gx:6.2,
+h:'<p>Aquí la función sí está definida en x = 0, pero su valor (5) no coincide con el límite (3): lim x→0 f(x) = 3 ≠ f(0) = 5. La curva tiene un hueco y el punto queda flotando arriba.</p><p>Sigue siendo <b>evitable</b>: bastaría redefinir f(0) = 3. Salta el hueco; el punto suelto (0, 5) es una plataforma extra por si quieres pisarlo.</p>'},
+{t:1,n:'El escalón hacia arriba',fx:'f(x) = x/4 − 1   si x < 0\nf(x) = x/4 + 1   si x ≥ 0',oy:280,segs:[{f:x=>x/4-1,a:-9,b:0,e1:'o'},{f:x=>x/4+1,a:0,b:9,e0:'c'}],lab:[[-3.2,-0.3,'lím x→0⁻ = −1'],[0.4,1.7,'lím x→0⁺ = 1']],sx:-8.5,gx:8.5,
+h:'<p>Los límites laterales existen pero son distintos: lim x→0⁻ f(x) = −1 y lim x→0⁺ f(x) = 1. Como no coinciden, el límite en 0 <b>no existe</b>. La gráfica «salta» 2 unidades hacia arriba.</p><p>Es una discontinuidad de <b>salto finito</b> y no se puede evitar. Círculo vacío: el punto no pertenece a esa rama; círculo lleno: sí (f(0) = 1). Salta el escalón.</p>'},
+{t:1,n:'El precipicio',fx:'f(x) = 3 + x/6      si x < 0\nf(x) = −1 + x²/16   si x ≥ 0',oy:300,segs:[{f:x=>3+x/6,a:-9,b:0,e1:'o'},{f:x=>-1+x*x/16,a:0,b:9,e0:'c'}],lab:[[-5.5,3.6,'lím x→0⁻ = 3'],[0.5,-1.6,'lím x→0⁺ = −1']],sx:-8.5,gx:8.5,
+h:'<p>Otro salto finito, pero hacia abajo: lim x→0⁻ f(x) = 3 y lim x→0⁺ f(x) = −1, así que el salto es de −4. Otra vez el límite en 0 no existe, aunque cada límite lateral sí.</p><p>Aquí la plataforma se acaba de golpe y caes a la otra rama. Un salto puede ir en cualquier sentido; lo que lo define es que los dos límites laterales sean finitos y diferentes.</p>'},
+{t:2,n:'El abismo doble',fx:'f(x) = 1 − 1/x²',oy:300,asy:0,segs:[{f:x=>1-1/(x*x),a:-9,b:-0.3},{f:x=>1-1/(x*x),a:0.3,b:9}],lab:[[0.2,1.6,'x = 0 (asíntota)'],[-8.5,-0.6,'lím x→0 f(x) = −∞']],sx:-8.5,gx:8.5,
+h:'<p>Cuando x se acerca a 0 por cualquier lado, f(x) se hunde sin cota: lim x→0 f(x) = −∞. La recta punteada x = 0 es una <b>asíntota vertical</b> y f no está definida ahí.</p><p>Es una discontinuidad <b>infinita</b>: los valores no se acercan a ningún número. Las dos ramas caen hacia el abismo; salta de una a la otra antes de que la pendiente te arrastre.</p>'},
+{t:2,n:'Dos lados opuestos',fx:'f(x) = 1/x',oy:300,asy:0,segs:[{f:x=>1/x,a:-9,b:-0.85},{f:x=>1/x,a:0.85,b:9}],lab:[[0.2,-1.2,'x = 0 (asíntota)'],[-8.7,-1,'lím x→0⁻ = −∞'],[3,1.2,'lím x→0⁺ = +∞']],sx:-8.5,gx:8.5,
+h:'<p>Aquí los límites laterales divergen hacia lados opuestos: lim x→0⁻ 1/x = −∞ y lim x→0⁺ 1/x = +∞. La rama izquierda se hunde y la derecha baja desde lo más alto.</p><p>También es <b>infinita</b>, con la misma asíntota x = 0. Salta desde la izquierda hacia arriba para caer en la rama derecha, donde la curva vuelve a bajar hasta la bandera.</p>'}];
+const G=.5,JV=11,SP=3.2,STEP=20,DROP=22,R=9;
+let li=0,lv,mode='intro',p={x:0,y:0,vy:0,g:0,f:1,t:0},goal,deaths=0,done=[],keys={l:0,r:0,j:0};
+const bar=document.getElementById('bar'),ov=document.getElementById('ov');
+function drawBar(){bar.innerHTML=LV.map((_,i)=>`<button class="${i==li?'on':''} ${done[i]?'ok':''}" data-i="${i}">${i+1}</button>`).join('')+`<span>Caídas: ${deaths}</span>`}
+bar.onclick=e=>{const i=e.target.dataset&&e.target.dataset.i;if(i!==undefined)show(+i)};
+function surf(px,wall){const r=[];for(const s of lv.segs){const x=(px-OX)/SC;if(x>=s.a-1e-9&&x<=s.b+1e-9)r.push(lv.oy-s.f(x)*SC)}
+ if((lv.holes||[]).some(h=>Math.abs(px-(OX+h[0]*SC))<HOLE))r.length=0;
+ if(!wall)for(const q of lv.pts||[])if(Math.abs(px-(OX+q[0]*SC))<7)r.push(lv.oy-q[1]*SC);return r}
+function reset(){p.x=OX+lv.sx*SC;p.y=Math.min(...surf(p.x));p.vy=0;p.g=1}
+function show(i){li=i;lv=LV[i];mode='intro';drawBar();
+ const c=CO[lv.t];goal={x:OX+lv.gx*SC};goal.y=Math.min(...surf(goal.x,1));reset();
+ ov.style.display='block';
+ ov.innerHTML=`<span class="k" style="background:${c}">${TY[lv.t]}</span><h2>Nivel ${i+1}: ${lv.n}</h2><code>${lv.fx.replace(/\n/g,'<br>')}</code>${lv.h}<p><b>Meta:</b> ${i<LV.length-1?'llega al castillo 🏰':'¡rescata a la princesa! 👸'}</p><button id="go">Jugar</button>`;
+ document.getElementById('go').onclick=start}
+function start(){if(mode!=='intro')return;mode='play';ov.style.display='none'}
+function die(){deaths++;reset();drawBar()}
+function win(){done[li]=1;drawBar();
+ if(li<LV.length-1){show(li+1)}else{mode='end';ov.style.display='block';ov.innerHTML=`<h2>¡Rescataste a la princesa! 👸</h2><p>Completaste los 6 niveles. Recorriste los tres tipos de discontinuidad: <b>evitable</b> (el límite existe pero falta o no coincide el valor), <b>de salto</b> (límites laterales finitos y distintos) e <b>infinita</b> (los valores crecen sin cota cerca de una asíntota).</p><p>Caídas totales: ${deaths}</p><button id="rs">Jugar otra vez</button>`;document.getElementById('rs').onclick=()=>{deaths=0;done=[];show(0)}}}
+function step(){if(mode!=='play')return;
+ const d=keys.r-keys.l;
+ if(d){p.f=d;p.t++;const nx=Math.max(8,Math.min(W-8,p.x+d*SP));if(!surf(nx,1).some(y=>y<p.y-STEP))p.x=nx}
+ if(keys.j&&p.g){p.vy=-JV;p.g=0}
+ if(p.g){const c=surf(p.x).filter(y=>y>=p.y-STEP&&y<=p.y+DROP);if(c.length)p.y=Math.min(...c);else p.g=0}
+ if(!p.g){p.vy=Math.min(p.vy+G,14);const ny=p.y+p.vy;
+  if(p.vy>=0){const c=surf(p.x).filter(y=>y>=p.y-3),s=c.length?Math.min(...c):1e9;if(ny>=s){p.y=s;p.vy=0;p.g=1}else p.y=ny}else p.y=ny}
+ if(p.y>H+40)die();
+ else if(Math.hypot(p.x-goal.x,p.y-goal.y)<26)win()}
+function castle(x,y){const st='#a8a29e',ln='rgba(70,60,55,.45)';
+ X.fillStyle='#78716c';X.fillRect(x-50,y-2,100,58);
+ const blk=(l,t,w,h)=>{X.fillStyle=st;X.fillRect(l,t,w,h);X.fillStyle='rgba(0,0,0,.16)';X.fillRect(l+w*.62,t,w*.38,h);X.strokeStyle=ln;X.lineWidth=1;X.beginPath();
+  for(let r=t+8,k=0;r<t+h;r+=8,k++){X.moveTo(l,r);X.lineTo(l+w,r);for(let c=l+(k%2?6:12);c<l+w;c+=12){X.moveTo(c,r-8);X.lineTo(c,r)}}X.stroke()};
+ const roof=(cx,b,hw,h,col)=>{X.fillStyle=col;X.beginPath();X.moveTo(cx-hw,b);X.lineTo(cx,b-h);X.lineTo(cx+hw,b);X.fill();X.fillStyle='rgba(0,0,0,.2)';X.beginPath();X.moveTo(cx,b-h);X.lineTo(cx+hw,b);X.lineTo(cx,b);X.fill()};
+ const win=(cx,t)=>{X.fillStyle='#1c1917';X.fillRect(cx-2.5,t+2,5,8);X.beginPath();X.arc(cx,t+2,2.5,Math.PI,0);X.fill()};
+ blk(x-32,y-52,64,52);X.fillStyle=st;for(let c=x-32;c<x+28;c+=10)X.fillRect(c,y-58,6,6);
+ blk(x-18,y-84,36,34);
+ blk(x-50,y-72,20,72);blk(x+30,y-72,20,72);
+ roof(x-40,y-72,15,28,'#991b1b');roof(x+40,y-72,15,28,'#991b1b');roof(x,y-84,22,34,'#1e40af');
+ for(const t of [-64,-44,-24]){win(x-40,y+t);win(x+40,y+t)}win(x-7,y-74);win(x+7,y-74);win(x-22,y-40);win(x+22,y-40);
+ X.beginPath();X.moveTo(x-10,y);X.lineTo(x-10,y-24);X.arc(x,y-24,10,Math.PI,0);X.lineTo(x+10,y);X.closePath();X.fillStyle='#2a1a10';X.fill();
+ X.strokeStyle='#5a3d22';X.lineWidth=1.5;X.beginPath();for(const d of [-5,0,5]){X.moveTo(x+d,y);X.lineTo(x+d,y-32)}X.stroke();
+ X.strokeStyle='#3f3f46';X.beginPath();X.moveTo(x-10,y-8);X.lineTo(x+10,y-8);X.moveTo(x-10,y-19);X.lineTo(x+10,y-19);X.stroke();
+ X.strokeStyle='#57534e';X.lineWidth=3;X.beginPath();X.moveTo(x-10,y);X.lineTo(x-10,y-24);X.arc(x,y-24,10,Math.PI,0);X.lineTo(x+10,y);X.stroke();
+ const w=Math.sin(Date.now()/250)*2;X.strokeStyle='#e5e7eb';X.lineWidth=2;X.beginPath();X.moveTo(x,y-118);X.lineTo(x,y-136);X.stroke();
+ X.fillStyle='#dc2626';X.beginPath();X.moveTo(x,y-136);X.lineTo(x+18,y-131+w);X.lineTo(x,y-126);X.fill()}
+function drawGoal(){const x=goal.x,y=goal.y;
+ if(li<LV.length-1){castle(x,y);}else{
+  X.fillStyle='#facc15';X.beginPath();X.arc(x,y-30,8,0,7);X.fill();
+  X.fillStyle='#f472b6';X.beginPath();X.moveTo(x,y-25);X.lineTo(x-12,y);X.lineTo(x+12,y);X.fill();
+  X.fillStyle='#fcd9b6';X.beginPath();X.arc(x,y-31,6,0,7);X.fill();
+  X.fillStyle='#fde047';X.beginPath();X.moveTo(x-6,y-37);X.lineTo(x-6,y-43);X.lineTo(x-3,y-39);X.lineTo(x,y-44);X.lineTo(x+3,y-39);X.lineTo(x+6,y-43);X.lineTo(x+6,y-37);X.fill();
+  X.strokeStyle='#fcd9b6';X.lineWidth=3;X.beginPath();X.moveTo(x+4,y-20);X.lineTo(x+13,y-30);X.stroke();
+  X.fillStyle='#f472b6';X.font='16px system-ui,sans-serif';X.fillText('♥',x-20,y-40);
+ }}
+function pieces(s){const o=lv.oy,r=[];let c=null;
+ for(let px=OX+s.a*SC;px<=OX+s.b*SC+.1;px+=2){const y=o-s.f((px-OX)/SC)*SC,hole=(lv.holes||[]).some(h=>Math.abs(px-(OX+h[0]*SC))<HOLE);
+  if(hole||y>H+60||y<-60){c=null;continue}if(!c){c=[];r.push(c)}c.push([px,y])}return r}
+function cloud(x,y,k){X.beginPath();X.arc(x,y,14*k,0,7);X.arc(x+16*k,y-6*k,18*k,0,7);X.arc(x+34*k,y,14*k,0,7);X.fill()}
+function drawKnight(){const mv=p.g&&(keys.l||keys.r),sw=mv?Math.sin(p.t*.5)*3.5:(p.g?0:2);
+ if(p.g){X.fillStyle='rgba(20,25,15,.35)';X.beginPath();X.ellipse(p.x,p.y+3,14,4.5,0,0,7);X.fill()}
+ X.save();X.translate(p.x,p.y);X.scale(p.f*1.55,1.55);
+ X.fillStyle='#b91c1c';X.beginPath();X.moveTo(-5,-22);X.lineTo(-12,p.g?-7:-12);X.lineTo(-4,-8);X.fill();
+ X.fillStyle='#6b7686';X.fillRect(-5+sw,-9,4.5,9);X.fillRect(1-sw,-9,4.5,9);
+ X.fillStyle='#2b2f38';X.fillRect(-5+sw,-2.5,6,2.5);X.fillRect(1-sw,-2.5,6,2.5);
+ X.fillStyle='#8b94a3';X.fillRect(-6,-21,12,13);X.fillStyle='#dbe2ea';X.fillRect(-6,-21,3.5,13);X.fillStyle='#5b4636';X.fillRect(-6,-12,12,2);
+ X.fillStyle='#a3adba';X.beginPath();X.arc(0,-26,6,0,7);X.fill();X.fillStyle='#e6ebf1';X.beginPath();X.arc(-2.2,-28,2,0,7);X.fill();
+ X.fillStyle='#1f2937';X.fillRect(0,-27,6.5,2);
+ X.fillStyle='#dc2626';X.beginPath();X.ellipse(-3,-33,5,2.2,-.5,0,7);X.fill();
+ X.strokeStyle='#e5e7eb';X.lineWidth=2;X.beginPath();X.moveTo(9,-15);X.lineTo(18,-27);X.stroke();
+ X.strokeStyle='#92400e';X.beginPath();X.moveTo(7,-19);X.lineTo(12,-13);X.stroke();
+ X.fillStyle='#1d4ed8';X.beginPath();X.moveTo(1,-20);X.lineTo(10,-20);X.lineTo(10,-14);X.quadraticCurveTo(5.5,-8,1,-14);X.fill();
+ X.fillStyle='#e5e7eb';X.fillRect(5,-19,1.6,8);X.fillRect(2.5,-16.5,6.6,1.6);
+ X.restore()}
+function draw(){const o=lv.oy,c=CO[lv.t];
+ let g=X.createLinearGradient(0,0,0,H);g.addColorStop(0,'#4f9fdc');g.addColorStop(1,'#cfe8f5');X.fillStyle=g;X.fillRect(0,0,W,H);
+ X.fillStyle='#fff3b0';X.beginPath();X.arc(710,70,30,0,7);X.fill();
+ X.fillStyle='rgba(255,255,255,.85)';cloud(90,70,1);cloud(430,45,.8);cloud(590,115,.7);
+ for(const [col,b,a] of [['#9cc7a6',330,26],['#79ad86',365,20]]){X.fillStyle=col;X.beginPath();X.moveTo(0,H);for(let x=0;x<=W;x+=10)X.lineTo(x,b+Math.sin(x*.011+b)*a+Math.sin(x*.03)*8);X.lineTo(W,H);X.fill()}
+ X.lineCap='round';X.lineJoin='round';
+ for(const s of lv.segs)for(const pc of pieces(s)){
+  X.fillStyle='#6e4a2a';X.beginPath();X.moveTo(pc[0][0],H+10);for(const q of pc)X.lineTo(q[0],q[1]);X.lineTo(pc[pc.length-1][0],H+10);X.fill();
+  X.beginPath();for(const q of pc)X.lineTo(q[0],q[1]+1);X.lineWidth=9;X.strokeStyle='#3f9d3a';X.stroke();
+  X.beginPath();for(const q of pc)X.lineTo(q[0],q[1]-2);X.lineWidth=3;X.strokeStyle='#86d15a';X.stroke();
+  X.lineWidth=1.5;X.strokeStyle='#4cae3f';X.beginPath();for(let k=0;k<pc.length;k+=3){const q=pc[k];X.moveTo(q[0],q[1]-3);X.lineTo(q[0]+(k%2?2:-2),q[1]-7-k%3)}X.stroke()}
+ X.lineWidth=1.5;X.setLineDash([4,6]);X.strokeStyle='rgba(255,255,255,.7)';X.beginPath();X.moveTo(0,o);X.lineTo(W,o);X.moveTo(OX,0);X.lineTo(OX,H);X.stroke();X.setLineDash([]);
+ if(lv.asy!==undefined){X.setLineDash([8,6]);X.lineWidth=2.5;X.strokeStyle='#facc15';X.beginPath();X.moveTo(OX+lv.asy*SC,0);X.lineTo(OX+lv.asy*SC,H);X.stroke();X.setLineDash([])}
+ const dot=(x,y,open)=>{X.beginPath();X.arc(x,y,6.5,0,7);X.fillStyle=open?'#f8fafc':c;X.fill();X.lineWidth=2.5;X.strokeStyle='#1e293b';X.stroke()};
+ for(const s of lv.segs){if(s.e0)dot(OX+s.a*SC,o-s.f(s.a)*SC,s.e0=='o');if(s.e1)dot(OX+s.b*SC,o-s.f(s.b)*SC,s.e1=='o')}
+ for(const h of lv.holes||[])dot(OX+h[0]*SC,o-h[1]*SC,1);
+ for(const q of lv.pts||[]){const x=OX+q[0]*SC,y=o-q[1]*SC;X.fillStyle='#6e4a2a';X.fillRect(x-9,y,18,9);X.fillStyle='#3f9d3a';X.fillRect(x-9,y-3,18,5);dot(x,y-1,0)}
+ X.font='bold 13px ui-monospace,Menlo,monospace';X.textAlign='left';X.lineWidth=3.5;X.strokeStyle='rgba(15,23,42,.9)';
+ for(const l of lv.lab){const x=OX+l[0]*SC,y=o-l[1]*SC;X.strokeText(l[2],x,y);X.fillStyle='#fff';X.fillText(l[2],x,y)}
+ drawGoal();drawKnight()}
+let last=0,acc=0;function loop(t){acc+=Math.min(50,t-last);last=t;while(acc>=16.67){step();acc-=16.67}draw();requestAnimationFrame(loop)}
+const K={ArrowLeft:'l',a:'l',A:'l',ArrowRight:'r',d:'r',D:'r',ArrowUp:'j',w:'j',W:'j',' ':'j'};
+addEventListener('keydown',e=>{const k=K[e.key];if(mode==='intro'&&(e.key==='Enter'||e.key===' ')){e.preventDefault();start();return}
+ if(k){keys[k]=1;if(e.key.startsWith('Arrow')||e.key===' ')e.preventDefault()}});
+addEventListener('keyup',e=>{const k=K[e.key];if(k)keys[k]=0});
+for(const [id,k] of [['bl','l'],['br','r'],['bj','j']]){const b=document.getElementById(id);
+ b.onpointerdown=e=>{e.preventDefault();keys[k]=1};['pointerup','pointerleave','pointercancel'].forEach(v=>b.addEventListener(v,()=>keys[k]=0))}
+show(0);requestAnimationFrame(t=>{last=t;loop(t)});
+</script></body></html>
